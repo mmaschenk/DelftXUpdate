@@ -37,6 +37,12 @@ def certificates_generatedcertificate_file(coursename, base_path):
                    'certificates_generatedcertificate', site, 'analytics.sql')
 
 
+def mongo_file(coursename, base_path):
+    return os.path.join(
+        base_path, coursename,
+        '-'.join([organization, coursename, site + '.mongo']))
+
+
 def eventlogfile(date, basepath):
     return os.path.join(basepath,
                         loglocation,
