@@ -40,8 +40,8 @@ def processcourse(coursename, base_path, bufferLocation=None):
     connection = opendb()
 
     learnermode.process(coursename, base_path, connection, ci)
-    #learnermode.sessions(ci, base_path, connection,
-    #                     bufferLocation=bufferLocation)
+    learnermode.sessions(ci, base_path, connection,
+                         bufferLocation=bufferLocation)
     # print ci
     connection.rollback()
 

@@ -229,7 +229,6 @@ def sessions(course_metadata_map, base_path, connection, bufferLocation=None):
 
     current_date = parse(course_metadata_map["start_date"]).date()
     end_next_date = parse(course_metadata_map["end_date"]).date() + oneday
-    end_next_date = parse("2015-09-02").date() + oneday
 
     learner_all_event_logs = {}
     updated_learner_all_event_logs = {}
