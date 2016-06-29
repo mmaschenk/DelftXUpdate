@@ -40,11 +40,14 @@ def processcourse(coursename, base_path, bufferLocation=None):
     connection = opendb()
 
     #learnermode.process(coursename, base_path, connection, ci)
-    #learnermode.sessions(ci, base_path, connection,
+    # learnermode.sessions(ci, base_path, connection,
     #                     bufferLocation=bufferLocation)
     # print ci
-    
+
     forummode.forum_interaction(coursename, base_path, ci, connection)
+    forummode.forum_sessions(coursename, base_path, ci, connection,
+                             bufferLocation=bufferLocation)
+
 
 def main(data_path, course_list_path=None):
 
