@@ -9,6 +9,7 @@ import gzip
 import mysql.connector
 import json
 import argparse
+import logging
 
 from translation.LearnerMode import learner_mode, sessions
 from translation.ForumMode import forum_interaction, forum_sessions
@@ -26,22 +27,27 @@ def opendb():
     host = '127.0.0.1'
     database = 'DelftX'
     connection = mysql.connector.connect(
-        user=user, password=password, host=host, database=database)
+        user=user, password=password, host=host, database=database,
+        charset='utf8', use_unicode=True)
     return connection
 
 
-def processcourse(coursename, base_path):
+def processcourse(coursename, base_path, bufferLocation=None):
+    logging.basicConfig(level=logging.DEBUG,
+                        format='%(asctime)s %(levelname)s %(message)s')
     infoname = names.course_structure_file(coursename, base_path)
     ci = courseinformation.extract(infoname)
     connection = opendb()
 
-    learnermode.process(coursename, base_path, connection.cursor(), ci)
-    print ci
-
+    learnermode.process(coursename, base_path, connection, ci)
+    #learnermode.sessions(ci, base_path, connection,
+    #                     bufferLocation=bufferLocation)
+    # print ci
+    connection.rollback()
 
 def main(data_path, course_list_path=None):
 
-    cursor = opendb()
+    cursor = opendb().cursor()
 
     # Gather the list of translated courses
     translated_courses = set()
@@ -205,6 +211,8 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Process DelftX datafiles')
     parser.add_argument('coursename', type=str, default="")
     parser.add_argument('--directory', type=str, default="")
+    parser.add_argument('--bufferlocation', type=str, default=None)
     args = parser.parse_args()
-    processcourse(args.coursename, args.directory)
+    processcourse(args.coursename, args.directory,
+                  bufferLocation=args.bufferlocation)
     print "All finished."
