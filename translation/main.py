@@ -17,7 +17,7 @@ from translation.VideoMode import video_interaction
 from translation.QuizMode import quiz_mode, quiz_sessions
 
 from delftx.util import courseinformation, names
-from delftx import learnermode, forummode, videomode
+from delftx import learnermode, forummode, videomode, quiz_mode
 
 
 def opendb():
@@ -48,7 +48,10 @@ def processcourse(coursename, base_path, bufferLocation=None):
     #forummode.forum_sessions(coursename, base_path, ci, connection,
     #                         bufferLocation=bufferLocation)
 
-    videomode.video_interaction(coursename, base_path, ci, connection,
+    #videomode.video_interaction(coursename, base_path, ci, connection,
+    #                         bufferLocation=bufferLocation)
+
+    quiz_mode.quiz_mode(coursename, base_path, ci, connection,
                              bufferLocation=bufferLocation)
 
 
