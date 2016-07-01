@@ -51,9 +51,11 @@ def processcourse(coursename, base_path, bufferLocation=None):
     #videomode.video_interaction(coursename, base_path, ci, connection,
     #                         bufferLocation=bufferLocation)
 
-    quiz_mode.quiz_mode(coursename, base_path, ci, connection,
-                             bufferLocation=bufferLocation)
+    #quiz_mode.quiz_mode(coursename, base_path, ci, connection,
+    #                         bufferLocation=bufferLocation)
 
+    quiz_mode.quiz_session(coursename, base_path, ci, connection,
+                             bufferLocation=bufferLocation)
 
 def main(data_path, course_list_path=None):
 
