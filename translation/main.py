@@ -16,8 +16,9 @@ from translation.ForumMode import forum_interaction, forum_sessions
 from translation.VideoMode import video_interaction
 from translation.QuizMode import quiz_mode, quiz_sessions
 
-from delftx.util import courseinformation, names
+from delftx.util import courseinformation, names, EventProcessorRunner, BaseEventProcessor
 from delftx import learnermode, forummode, videomode, quiz_mode
+from delftx.videomode import VideoInteraction
 
 
 def opendb():
@@ -34,10 +35,31 @@ def opendb():
 
 def processcourse(coursename, base_path, bufferLocation=None):
     logging.basicConfig(level=logging.DEBUG,
-                        format='%(asctime)s %(levelname)s %(message)s')
+                        format='%(asctime)s %(levelname)s %(filename)s %(funcName)s %(message)s')
     infoname = names.course_structure_file(coursename, base_path)
     ci = courseinformation.extract(infoname)
     connection = opendb()
+
+    epr = EventProcessorRunner(ci, base_path)
+    learnersessions = learnermode.Sessions(ci, base_path, connection)
+    #epr.addProcessor(learnersessions)
+    
+    videointeraction = VideoInteraction(ci, base_path, connection)
+    #epr.addProcessor(videointeraction)
+    
+    forumSession = forummode.Sessions(ci, base_path, connection)
+    #epr.addProcessor(forumSession)
+    
+    quizmode = quiz_mode.Mode(ci, base_path, connection)
+    #epr.addProcessor(quizmode)
+    
+    quizsessions = quiz_mode.Sessions(ci, base_path, connection)
+    epr.addProcessor(quizsessions)
+    #b = BaseEventProcessor(ci, base_path, connection)
+    #epr.addProcessor(b)
+    
+    epr.processall()
+    # learnersessions.sessions()
 
     #learnermode.process(coursename, base_path, connection, ci)
     # learnermode.sessions(ci, base_path, connection,
@@ -45,17 +67,23 @@ def processcourse(coursename, base_path, bufferLocation=None):
     # print ci
 
     #forummode.forum_interaction(coursename, base_path, ci, connection)
-    #forummode.forum_sessions(coursename, base_path, ci, connection,
+    # forummode.forum_sessions(coursename, base_path, ci, connection,
     #                         bufferLocation=bufferLocation)
 
-    #videomode.video_interaction(coursename, base_path, ci, connection,
+    # videomode.video_interaction(coursename, base_path, ci, connection,
     #                         bufferLocation=bufferLocation)
 
-    #quiz_mode.quiz_mode(coursename, base_path, ci, connection,
+    # quiz_mode.quiz_mode(coursename, base_path, ci, connection,
     #                         bufferLocation=bufferLocation)
 
-    quiz_mode.quiz_session(coursename, base_path, ci, connection,
-                             bufferLocation=bufferLocation)
+    #e = 0
+    # for f,x in eventGenerator(ci, base_path, bufferLocation=bufferLocation):
+    #    e = e + 1
+    #    print f, e
+
+    # quiz_mode.quiz_session(coursename, base_path, ci, connection,
+    #                         bufferLocation=bufferLocation)
+
 
 def main(data_path, course_list_path=None):
 

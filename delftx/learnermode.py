@@ -1,10 +1,11 @@
-from delftx.util import names
+from delftx.util import names, BaseEventProcessor
 import delftx.util
 import datetime
 import json
 import operator
 from dateutil.parser import parse
 import logging
+from delftx.util import eventGenerator
 
 logger = logging.getLogger(__name__)
 
@@ -224,68 +225,33 @@ def process(course_name, base_path, connection, course_metadata_map):
                  "database" % (len(learner_demographic_record),))
 
 
-def sessions(course_metadata_map, base_path, connection, bufferLocation=None):
-    oneday = datetime.timedelta(days=1)
+class Sessions(BaseEventProcessor):
 
-    current_date = parse(course_metadata_map["start_date"]).date()
-    end_next_date = parse(course_metadata_map["end_date"]).date() + oneday
+    def __init__(self, course_metadata_map, base_path, connection):
+        super(Sessions,
+              self).__init__(course_metadata_map, base_path, connection)
 
-    learner_all_event_logs = {}
-    updated_learner_all_event_logs = {}
-    session_record = []
+        self.learner_all_event_logs = {}
+        self.updated_learner_all_event_logs = {}
+        self.session_record = []
 
-    logger.info('Scanning event logfiles from [%s] until [%s]' %
-                (current_date, end_next_date))
-
-    while current_date < end_next_date:
-        logger.info('Processing logfile for date: [%s]' % (current_date,))
-
-        learner_all_event_logs.clear()
-        learner_all_event_logs = updated_learner_all_event_logs.copy()
-        updated_learner_all_event_logs.clear()
+    def init_next_file(self):
+        self.learner_all_event_logs.clear()
+        self.learner_all_event_logs = \
+            self.updated_learner_all_event_logs.copy()
+        self.updated_learner_all_event_logs.clear()
 
         # Course_learner_id set
-        course_learner_id_set = set()
-        for course_learner_id in learner_all_event_logs.keys():
-            course_learner_id_set.add(course_learner_id)
+        self.course_learner_id_set = set()
+        for course_learner_id in self.learner_all_event_logs.keys():
+            self.course_learner_id_set.add(course_learner_id)
 
-        logger.debug("Opening logfile")
-        input_file = delftx.util.openeventlogfile(current_date, base_path,
-                                                  bufferLocation)
-        logger.debug("Opened logfile")
-        lines = input_file.readlines()
-        logger.debug("Read all input into memory. Processing %s lines",
-                     (len(lines)))
-
-        for line in lines:
-            jsonObject = json.loads(line)
-            global_learner_id = jsonObject["context"]["user_id"]
-            event_type = str(jsonObject["event_type"])
-
-            if global_learner_id != "":
-                course_id = jsonObject["context"]["course_id"]
-                course_learner_id = course_id + \
-                    "_" + str(global_learner_id)
-
-                event_time = jsonObject["time"]
-                event_time = event_time[0:19]
-                event_time = event_time.replace("T", " ")
-                event_time = datetime.datetime.strptime(
-                    event_time, "%Y-%m-%d %H:%M:%S")
-
-                if course_learner_id in course_learner_id_set:
-                    learner_all_event_logs[course_learner_id].append(
-                        {"event_time": event_time, "event_type": event_type})
-                else:
-                    learner_all_event_logs[course_learner_id] = [
-                        {"event_time": event_time, "event_type": event_type}]
-                    course_learner_id_set.add(course_learner_id)
-        logger.debug("%s json-lines processed" % (len(lines,)))
+    def post_next_file(self):
         logger.debug("Processing %s learner ids" %
-                     (len(learner_all_event_logs.keys())))
-        for course_learner_id in learner_all_event_logs.keys():
+                     (len(self.learner_all_event_logs.keys())))
 
-            event_logs = learner_all_event_logs[course_learner_id]
+        for course_learner_id in self.learner_all_event_logs.keys():
+            event_logs = self.learner_all_event_logs[course_learner_id]
 
             # Sorting
             event_logs.sort(key=operator.itemgetter('event_time'))
@@ -313,7 +279,7 @@ def sessions(course_metadata_map, base_path, connection, bufferLocation=None):
                             array = [
                                 session_id, course_learner_id, start_time,
                                 end_time, duration]
-                            session_record.append(array)
+                            self.session_record.append(array)
                         final_time = event_logs[i]["event_time"]
                         # Re-initialization
                         session_id = ""
@@ -331,7 +297,7 @@ def sessions(course_metadata_map, base_path, connection, bufferLocation=None):
                                 array = [
                                     session_id, course_learner_id, start_time,
                                     end_time, duration]
-                                session_record.append(array)
+                                self.session_record.append(array)
                             # Re-initialization
                             session_id = ""
                             start_time = ""
@@ -345,39 +311,61 @@ def sessions(course_metadata_map, base_path, connection, bufferLocation=None):
                     if log["event_time"] >= final_time:
                         new_logs.append(log)
 
-                updated_learner_all_event_logs[
+                self.updated_learner_all_event_logs[
                     course_learner_id] = new_logs
-        logger.debug("Processed learner id's")
-        current_date = current_date + oneday
 
-    # Filter duplicated records
-    updated_session_record = []
-    session_id_set = set()
-    for array in session_record:
-        session_id = array[0]
-        if session_id not in session_id_set:
-            session_id_set.add(session_id)
-            updated_session_record.append(array)
+    def handleEvent(self, jsonObject):
+        global_learner_id = jsonObject["context"]["user_id"]
+        event_type = str(jsonObject["event_type"])
 
-    session_record = updated_session_record
+        if global_learner_id != "":
+            course_id = jsonObject["context"]["course_id"]
+            course_learner_id = course_id + \
+                "_" + str(global_learner_id)
 
-    # Database version
-    cursor = connection.cursor(prepared=True)
-    sql = ("insert into "
-           "sessions(session_id, course_learner_id, start_time, end_time, "
-           "         duration) values (%s,%s,%s,%s,%s)")
+            event_time = jsonObject["time"]
+            event_time = event_time[0:19]
+            event_time = event_time.replace("T", " ")
+            event_time = datetime.datetime.strptime(
+                event_time, "%Y-%m-%d %H:%M:%S")
 
-    logger.debug("Starting logging %s records to database" %
-                 (len(session_record)))
-    for array in session_record:
-        session_id = array[0]
-        course_learner_id = array[1]
-        start_time = array[2]
-        end_time = array[3]
-        duration = array[4]
-        cursor.execute(
-            sql, (session_id, course_learner_id,
-                  start_time, end_time, duration))
+            if course_learner_id in self.course_learner_id_set:
+                self.learner_all_event_logs[course_learner_id].append(
+                    {"event_time": event_time, "event_type": event_type})
+            else:
+                self.learner_all_event_logs[course_learner_id] = [
+                    {"event_time": event_time, "event_type": event_type}]
+                self.course_learner_id_set.add(course_learner_id)
 
-    logger.debug("Finished logging %s records to database" %
-                 (len(session_record)))
+    def postprocessing(self):
+        # Filter duplicated records
+        updated_session_record = []
+        session_id_set = set()
+        for array in self.session_record:
+            session_id = array[0]
+            if session_id not in session_id_set:
+                session_id_set.add(session_id)
+                updated_session_record.append(array)
+
+        self.session_record = updated_session_record
+
+        # Database version
+        cursor = self.connection.cursor(prepared=True)
+        sql = ("insert into "
+               "sessions(session_id, course_learner_id, start_time, end_time, "
+               "         duration) values (%s,%s,%s,%s,%s)")
+
+        logger.debug("Starting logging %s records to database" %
+                     (len(self.session_record)))
+        for array in self.session_record:
+            session_id = array[0]
+            course_learner_id = array[1]
+            start_time = array[2]
+            end_time = array[3]
+            duration = array[4]
+            cursor.execute(
+                sql, (session_id, course_learner_id,
+                      start_time, end_time, duration))
+
+        logger.debug("Finished logging %s records to database" %
+                     (len(self.session_record)))
