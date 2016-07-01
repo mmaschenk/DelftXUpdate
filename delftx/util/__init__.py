@@ -5,7 +5,6 @@ import gzip
 import logging
 import json
 from dateutil.parser import parse
-from sos.plugins import processor
 
 logger = logging.getLogger(__name__)
 
@@ -77,19 +76,19 @@ def filteringEventGenerator(course_metadata_map, base_path,
         input_file = openeventlogfile(current_date, base_path,
                                       bufferLocation)
         logger.debug("Opened logfile")
-        lines = input_file.readlines()
-        logger.debug("Read all input into memory. Processing %s lines" %
-                     (len(lines),))
         first = True
-        for line in lines:
-            jsonObject = json.loads(line)
-            totalCnt = totalCnt + 1
-            if course_id in jsonObject["context"]["course_id"]:
-                filteredCnt = filteredCnt + 1
-                yield first, jsonObject
-            first = False
-        logger.debug("Finished file. "
-                     "Filtered %d from %d entries so far (%.2f %%)" %
+        linecnt = 0
+        with input_file as eventloginput:
+            for line in eventloginput:
+                linecnt = linecnt + 1
+                jsonObject = json.loads(line)
+                totalCnt = totalCnt + 1
+                if course_id in jsonObject["context"]["course_id"]:
+                    filteredCnt = filteredCnt + 1
+                    yield first, jsonObject
+                first = False
+        logger.debug("Finished file. Read %s lines" % (linecnt,))
+        logger.debug("Filtered %d from %d entries so far (%.2f %%)" %
                      (totalCnt - filteredCnt,
                       totalCnt,
                       float(totalCnt - filteredCnt) / totalCnt * 100))

@@ -42,16 +42,16 @@ def processcourse(coursename, base_path, bufferLocation=None):
 
     epr = EventProcessorRunner(ci, base_path)
     learnersessions = learnermode.Sessions(ci, base_path, connection)
-    #epr.addProcessor(learnersessions)
+    epr.addProcessor(learnersessions)
     
     videointeraction = VideoInteraction(ci, base_path, connection)
-    #epr.addProcessor(videointeraction)
+    epr.addProcessor(videointeraction)
     
     forumSession = forummode.Sessions(ci, base_path, connection)
-    #epr.addProcessor(forumSession)
+    epr.addProcessor(forumSession)
     
     quizmode = quiz_mode.Mode(ci, base_path, connection)
-    #epr.addProcessor(quizmode)
+    epr.addProcessor(quizmode)
     
     quizsessions = quiz_mode.Sessions(ci, base_path, connection)
     epr.addProcessor(quizsessions)
