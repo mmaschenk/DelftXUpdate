@@ -86,7 +86,7 @@ def filteringEventGenerator(course_metadata_map, base_path,
                 if course_id in jsonObject["context"]["course_id"]:
                     filteredCnt = filteredCnt + 1
                     yield first, jsonObject
-                first = False
+                    first = False
         logger.debug("Finished file. Read %s lines" % (linecnt,))
         logger.debug("Filtered %d from %d entries so far (%.2f %%)" %
                      (totalCnt - filteredCnt,
@@ -136,16 +136,24 @@ class EventProcessorRunner():
                 self.course_metadata_map, self.base_path):
             if firstevent:
                 if donestuff:
+                    logger.debug('Calling post_next_file on processors')
                     for p in self.processors:
                         p.post_next_file()
-                for p in self.processors:
+                    logger.debug('Done calling post_next_file on processors')
+                logger.debug('Calling init_next_file on processors')
+                for p in self.processors:                    
                     p.init_next_file()
+                logger.debug('Done calling init_next_file on processors')
             for p in self.processors:
                 p.handleEvent(jsonObject)
             donestuff = True
 
         if donestuff:
+            logger.debug('Calling final post_next_file on processors')
             for p in self.processors:
                 p.post_next_file()
+            logger.debug('Done calling final post_next_file on processors')
+        logger.debug('Calling postprocessing on processors')
         for p in self.processors:
             p.postprocessing()
+        logger.debug('Done calling postprocessing on processors')
