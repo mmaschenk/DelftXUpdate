@@ -68,6 +68,8 @@ def filteringEventGenerator(course_metadata_map, base_path,
     current_date = parse(course_metadata_map["start_date"]).date()
     end_next_date = parse(course_metadata_map["end_date"]).date() + oneday
 
+    logger.info('Going to proces files from: %s until %s' %
+                (current_date, end_next_date))
     course_id = course_metadata_map["course_id"]
     totalCnt = 0
     filteredCnt = 0
@@ -141,7 +143,7 @@ class EventProcessorRunner():
                         p.post_next_file()
                     logger.debug('Done calling post_next_file on processors')
                 logger.debug('Calling init_next_file on processors')
-                for p in self.processors:                    
+                for p in self.processors:
                     p.init_next_file()
                 logger.debug('Done calling init_next_file on processors')
             for p in self.processors:
