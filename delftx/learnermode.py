@@ -1,11 +1,7 @@
-from delftx.util import names, BaseEventProcessor
-import delftx.util
+from delftx.util import names, EventlogProcessor
 import datetime
-import json
 import operator
-from dateutil.parser import parse
 import logging
-from delftx.util import eventGenerator
 
 logger = logging.getLogger(__name__)
 
@@ -225,7 +221,7 @@ def process(course_name, base_path, connection, course_metadata_map):
                  "database" % (len(learner_demographic_record),))
 
 
-class Sessions(BaseEventProcessor):
+class Sessions(EventlogProcessor):
 
     def __init__(self, course_metadata_map, base_path, connection):
         super(Sessions,

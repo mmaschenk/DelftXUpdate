@@ -98,10 +98,10 @@ def filteringEventGenerator(course_metadata_map, base_path,
                  % (totalCnt, filteredCnt))
 
 
-class BaseEventProcessor(object):
+class EventlogProcessor(object):
 
     def __init__(self, course_metadata_map, base_path, connection):
-        super(BaseEventProcessor, self).__init__()
+        super(EventlogProcessor, self).__init__()
         self.course_metadata_map = course_metadata_map
         self.base_path = base_path
         self.connection = connection
