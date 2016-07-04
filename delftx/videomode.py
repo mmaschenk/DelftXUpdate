@@ -741,6 +741,9 @@ class VideoInteraction(BaseEventProcessor):
 
                 self.updated_learner_video_event_logs[
                     course_learner_id] = new_logs
+        logger.debug("Done processing %s learner ids" %
+                     (len(self.learner_video_event_logs.keys())))
+        
 
     def handleEvent(self, jsonObject):
         if jsonObject["event_type"] in self.video_event_types:

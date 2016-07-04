@@ -313,6 +313,8 @@ class Sessions(BaseEventProcessor):
 
                 self.updated_learner_all_event_logs[
                     course_learner_id] = new_logs
+        logger.debug("Done processing %s learner ids" %
+                     (len(self.learner_all_event_logs.keys())))
 
     def handleEvent(self, jsonObject):
         global_learner_id = jsonObject["context"]["user_id"]

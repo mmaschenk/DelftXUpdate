@@ -391,14 +391,18 @@ class Sessions(BaseEventProcessor):
                     if log["event_time"] >= final_time:
                         new_logs.append(log)
 
-                self.updated_learner_all_event_logs[course_learner_id] = new_logs
+                self.updated_learner_all_event_logs[
+                    course_learner_id] = new_logs
+        logger.debug("Done processing %s learner ids" %
+                     (len(self.learner_all_event_logs.keys())))
 
     def handleEvent(self, jsonObject):
         # For forum session separation
         global_learner_id = jsonObject["context"]["user_id"]
         event_type = str(jsonObject["event_type"])
 
-        if "/discussion/" in event_type or event_type in self.forum_event_types:
+        if ("/discussion/" in event_type or
+                event_type in self.forum_event_types):
             if event_type != "edx.forum.searched":
                 event_type = "forum_activity"
 
