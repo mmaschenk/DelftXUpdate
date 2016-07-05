@@ -31,11 +31,11 @@ def openeventlogfile(date, base_path, bufferLocation=None):
             gz_file.close()
             bf.close()
         logger.debug('Opening unzipped file [%s]' % (bufFile,))
-        return open(bufFile, "r")
+        return open(bufFile, "r"), bufFile
     else:
         zfile = names.eventlogfile(date, base_path)
         logger.debug('Opening zipped file [%s]' % (zfile,))
-        return gzip.GzipFile(zfile, "r")
+        return gzip.GzipFile(zfile, "r"), zfile
 
 
 def eventGenerator(course_metadata_map, base_path, bufferLocation=None):
@@ -61,43 +61,54 @@ def eventGenerator(course_metadata_map, base_path, bufferLocation=None):
     logger.debug("Finished all event files")
 
 
-def filteringEventGenerator(course_metadata_map, base_path,
-                            bufferLocation=None):
-    oneday = datetime.timedelta(days=1)
+class filteringEventGenerator(object):
 
-    current_date = parse(course_metadata_map["start_date"]).date()
-    end_next_date = parse(course_metadata_map["end_date"]).date() + oneday
+    def __init__(self, course_metadata_map, base_path,
+                 bufferLocation=None):
+        self.course_metadata_map = course_metadata_map
+        self.base_path = base_path
+        self.bufferLocation = bufferLocation
 
-    logger.info('Going to proces files from: %s until %s' %
-                (current_date, end_next_date))
-    course_id = course_metadata_map["course_id"]
-    totalCnt = 0
-    filteredCnt = 0
-    while current_date < end_next_date:
-        logger.debug("Opening logfile")
-        input_file = openeventlogfile(current_date, base_path,
-                                      bufferLocation)
-        logger.debug("Opened logfile")
-        first = True
-        linecnt = 0
-        with input_file as eventloginput:
-            for line in eventloginput:
-                linecnt = linecnt + 1
-                jsonObject = json.loads(line)
-                totalCnt = totalCnt + 1
-                if course_id in jsonObject["context"]["course_id"]:
-                    filteredCnt = filteredCnt + 1
-                    yield first, jsonObject
-                    first = False
-        logger.debug("Finished file. Read %s lines" % (linecnt,))
-        logger.debug("Filtered %d from %d entries so far (%.2f %%)" %
-                     (totalCnt - filteredCnt,
-                      totalCnt,
-                      float(totalCnt - filteredCnt) / totalCnt * 100))
-        current_date = current_date + oneday
-    logger.debug("Finished all event files. %s entries read. "
-                 "%s entries remained after filtering"
-                 % (totalCnt, filteredCnt))
+    def filteringEventGenerator(self):
+
+        oneday = datetime.timedelta(days=1)
+
+        current_date = parse(self.course_metadata_map["start_date"]).date()
+        end_next_date = parse(
+            self.course_metadata_map["end_date"]).date() + oneday
+
+        logger.info('Going to proces files from: %s until %s' %
+                    (current_date, end_next_date))
+        course_id = self.course_metadata_map["course_id"]
+        totalCnt = 0
+        filteredCnt = 0
+        while current_date < end_next_date:
+            logger.debug("Opening logfile")
+            input_file, filename = openeventlogfile(current_date,
+                                                    self.base_path,
+                                                    self.bufferLocation)
+            self.currentfile = filename
+            logger.debug("Opened logfile")
+            first = True
+            self.currentline = 0
+            with input_file as eventloginput:
+                for line in eventloginput:
+                    self.currentline = self.currentline + 1
+                    jsonObject = json.loads(line)
+                    totalCnt = totalCnt + 1
+                    if course_id in jsonObject["context"]["course_id"]:
+                        filteredCnt = filteredCnt + 1
+                        yield first, jsonObject
+                        first = False
+            logger.debug("Finished file. Read %s lines" % (self.currentline,))
+            logger.debug("Filtered %d from %d entries so far (%.2f %%)" %
+                         (totalCnt - filteredCnt,
+                          totalCnt,
+                          float(totalCnt - filteredCnt) / totalCnt * 100))
+            current_date = current_date + oneday
+        logger.debug("Finished all event files. %s entries read. "
+                     "%s entries remained after filtering"
+                     % (totalCnt, filteredCnt))
 
 
 class EventlogProcessor(object):
@@ -133,29 +144,34 @@ class EventProcessorRunner():
         self.processors.append(processor)
 
     def processall(self):
+        evg = filteringEventGenerator(self.course_metadata_map, self.base_path)
         donestuff = False
-        for firstevent, jsonObject in filteringEventGenerator(
-                self.course_metadata_map, self.base_path):
-            if firstevent:
-                if donestuff:
-                    logger.debug('Calling post_next_file on processors')
+        try:
+            for firstevent, jsonObject in evg.filteringEventGenerator():
+                if firstevent:
+                    if donestuff:
+                        logger.debug('Calling post_next_file on processors')
+                        for p in self.processors:
+                            p.post_next_file()
+                        logger.debug('Done calling post_next_file on '
+                                     'processors')
+                    logger.debug('Calling init_next_file on processors')
                     for p in self.processors:
-                        p.post_next_file()
-                    logger.debug('Done calling post_next_file on processors')
-                logger.debug('Calling init_next_file on processors')
+                        p.init_next_file()
+                    logger.debug('Done calling init_next_file on processors')
                 for p in self.processors:
-                    p.init_next_file()
-                logger.debug('Done calling init_next_file on processors')
+                    p.handleEvent(jsonObject)
+                donestuff = True
+            if donestuff:
+                logger.debug('Calling final post_next_file on processors')
+                for p in self.processors:
+                    p.post_next_file()
+                logger.debug('Done calling final post_next_file on processors')
+            logger.debug('Calling postprocessing on processors')
             for p in self.processors:
-                p.handleEvent(jsonObject)
-            donestuff = True
-
-        if donestuff:
-            logger.debug('Calling final post_next_file on processors')
-            for p in self.processors:
-                p.post_next_file()
-            logger.debug('Done calling final post_next_file on processors')
-        logger.debug('Calling postprocessing on processors')
-        for p in self.processors:
-            p.postprocessing()
-        logger.debug('Done calling postprocessing on processors')
+                p.postprocessing()
+            logger.debug('Done calling postprocessing on processors')
+        except:
+            logger.critical('error occured while processing file %s line %s' %
+                            (evg.currentfile, evg.currentline))
+            raise

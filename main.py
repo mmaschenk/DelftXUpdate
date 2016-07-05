@@ -1,10 +1,12 @@
 import mysql.connector
 import argparse
 import logging
-
+import traceback
 
 from delftx.util import courseinformation, names, EventProcessorRunner
 from delftx import learnermode, forummode, videomode, quiz_mode
+
+logger = logging.getLogger(__name__)
 
 
 def opendb():
@@ -51,12 +53,30 @@ def processcourse(coursename, base_path, bufferLocation=None):
 
 ###############################################################################
 if __name__ == '__main__':
+    logging.basicConfig(level=logging.DEBUG,
+                        format='%(asctime)s %(levelname)s %(filename)s '
+                        '%(funcName)s %(message)s')
 
     parser = argparse.ArgumentParser(description='Process DelftX datafiles')
     parser.add_argument('coursename', type=str, default="")
     parser.add_argument('--directory', type=str, default="")
     parser.add_argument('--bufferlocation', type=str, default=None)
+    parser.add_argument('--logfile', type=str, default=None)
     args = parser.parse_args()
-    processcourse(args.coursename, args.directory,
-                  bufferLocation=args.bufferlocation)
+
+    if args.logfile:
+        fh = logging.FileHandler(filename=args.logfile)
+        formatter = logging.Formatter('%(asctime)s %(levelname)s %(filename)s '
+                                      '%(funcName)s %(message)s')
+        fh.setFormatter(formatter)
+        logging.getLogger('').addHandler(fh)
+
+    try:
+        processcourse(args.coursename, args.directory,
+                      bufferLocation=args.bufferlocation)
+    except:
+        for line in traceback.format_exc().splitlines():
+            logger.critical(line)
+        raise
+
     print "All finished."
