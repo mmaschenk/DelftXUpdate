@@ -4,6 +4,8 @@ import names
 import gzip
 import logging
 import json
+import traceback
+
 from dateutil.parser import parse
 
 logger = logging.getLogger(__name__)
@@ -94,11 +96,13 @@ class filteringEventGenerator(object):
             with input_file as eventloginput:
                 for line in eventloginput:
                     self.currentline = self.currentline + 1
-                    jsonObject = json.loads(line)
+                    self.lastJsonObject = None
+                    self.lastJsonObject = json.loads(line)
                     totalCnt = totalCnt + 1
-                    if course_id in jsonObject["context"]["course_id"]:
+                    if course_id in self.lastJsonObject["context"][
+                            "course_id"]:
                         filteredCnt = filteredCnt + 1
-                        yield first, jsonObject
+                        yield first, self.lastJsonObject
                         first = False
             logger.debug("Finished file. Read %s lines" % (self.currentline,))
             logger.debug("Filtered %d from %d entries so far (%.2f %%)" %
@@ -146,6 +150,8 @@ class EventProcessorRunner():
     def processall(self):
         evg = filteringEventGenerator(self.course_metadata_map, self.base_path)
         donestuff = False
+        for p in self.processors:
+            p.processstatistics = {'totallines': 0, 'totalerrors': 0}
         try:
             for firstevent, jsonObject in evg.filteringEventGenerator():
                 if firstevent:
@@ -155,22 +161,49 @@ class EventProcessorRunner():
                             p.post_next_file()
                         logger.debug('Done calling post_next_file on '
                                      'processors')
+                        for p in self.processors:
+                            logger.debug('Module %s: %s lines processed. '
+                                         '%s errors' %
+                                         (p.__class__,
+                                          p.processstatistics['totallines'],
+                                          p.processstatistics['totalerrors']))
+
                     logger.debug('Calling init_next_file on processors')
                     for p in self.processors:
                         p.init_next_file()
                     logger.debug('Done calling init_next_file on processors')
                 for p in self.processors:
-                    p.handleEvent(jsonObject)
+                    try:
+                        p.processstatistics['totallines'] += 1
+                        p.handleEvent(jsonObject)
+                    except:
+                        p.processstatistics['totalerrors'] += 1
+                        logger.error('error occured in handleevent')
+                        for line in traceback.format_exc().splitlines():
+                            logger.error(line)
+                        logger.error('error occured while processing file %s '
+                                     'line %s' %
+                                     (evg.currentfile, evg.currentline))
+                        logger.error('Json object is %s' %
+                                     (evg.lastJsonObject))
+                        logger.error('processing continues but results may be '
+                                     'incorrect')
                 donestuff = True
             if donestuff:
                 logger.debug('Calling final post_next_file on processors')
                 for p in self.processors:
                     p.post_next_file()
                 logger.debug('Done calling final post_next_file on processors')
+
             logger.debug('Calling postprocessing on processors')
             for p in self.processors:
                 p.postprocessing()
             logger.debug('Done calling postprocessing on processors')
+            for p in self.processors:
+                logger.debug('Module %s: %s lines processed. %s errors' %
+                             (p.__class__.__name__,
+                              p.processstatistics['totallines'],
+                              p.processstatistics['totalerrors']))
         except:
             logger.critical('error occured while processing file %s line %s' %
                             (evg.currentfile, evg.currentline))
