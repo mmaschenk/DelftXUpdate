@@ -86,9 +86,15 @@ class filteringEventGenerator(object):
         filteredCnt = 0
         while current_date < end_next_date:
             logger.debug("Opening logfile")
-            input_file, filename = openeventlogfile(current_date,
-                                                    self.base_path,
-                                                    self.bufferLocation)
+            try:
+                input_file, filename = openeventlogfile(current_date,
+                                                        self.base_path,
+                                                        self.bufferLocation)
+            except:
+                logger.error('Failed to open file for %s. '
+                             'Skipping to next file' % (current_date,))
+                current_date += oneday
+                continue
             self.currentfile = filename
             logger.debug("Opened logfile")
             first = True
