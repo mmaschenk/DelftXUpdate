@@ -1,7 +1,7 @@
-import datetime
 import logging
 import operator
-from delftx.util import EventlogProcessor
+import datetime
+from delftx import EventlogProcessor
 
 logger = logging.getLogger(__name__)
 

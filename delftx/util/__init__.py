@@ -5,10 +5,26 @@ import gzip
 import logging
 import json
 import traceback
+import mysql.connector
+
+from delftx.util import courseinformation
+from delftx import learnermode, forummode, videomode, quiz_mode
 
 from dateutil.parser import parse
 
 logger = logging.getLogger(__name__)
+
+
+def opendb():
+    # Database
+    user = 'root'
+    password = ''
+    host = '127.0.0.1'
+    database = 'DelftX'
+    connection = mysql.connector.connect(
+        user=user, password=password, host=host, database=database,
+        charset='utf8', use_unicode=True)
+    return connection
 
 
 def getNextDay(current_day_string):
@@ -121,28 +137,6 @@ class filteringEventGenerator(object):
                      % (totalCnt, filteredCnt))
 
 
-class EventlogProcessor(object):
-
-    def __init__(self, course_metadata_map, base_path, connection):
-        super(EventlogProcessor, self).__init__()
-        self.course_metadata_map = course_metadata_map
-        self.base_path = base_path
-        self.connection = connection
-
-    def init_next_file(self):
-        logger.warn('Unimplemented init_next_file method')
-
-    def post_next_file(self):
-        logger.debug('Unimplemented post_next_file method')
-
-    def handleEvent(self, jsonObject):
-        raise Exception(
-            'handleevent not implemented on ', self.__class__.__name__)
-
-    def postprocessing(self):
-        logger.warn('Unimplemented postprocessing method')
-
-
 class EventProcessorRunner():
 
     def __init__(self, course_metadata_map, base_path):
@@ -203,7 +197,16 @@ class EventProcessorRunner():
 
             logger.debug('Calling postprocessing on processors')
             for p in self.processors:
-                p.postprocessing()
+                try:
+                    p.postprocessing()
+                except:
+                    logger.critical('Error postprocessing in %s.%s',
+                                    (p.__class__.__module__,
+                                     p.__class__.__name__))
+                    for line in traceback.format_exc().splitlines():
+                        logger.critical(line)
+                    logger.critical(
+                        'Your output is probably (very) incomplete')
             logger.debug('Done calling postprocessing on processors')
             for p in self.processors:
                 logger.debug('Module %s: %s lines processed. %s errors' %
@@ -214,3 +217,132 @@ class EventProcessorRunner():
             logger.critical('error occured while processing file %s line %s' %
                             (evg.currentfile, evg.currentline))
             raise
+
+
+def processcourse(coursename, base_path, bufferLocation=None,
+                  skipSessions=False, skipMetadata=False):
+    logging.basicConfig(level=logging.DEBUG,
+                        format='%(asctime)s %(levelname)s %(filename)s '
+                        '%(funcName)s %(message)s')
+    infoname = names.course_structure_file(coursename, base_path)
+    ci = courseinformation.extract(infoname)
+    connection = opendb()
+
+    if not skipSessions:
+        epr = EventProcessorRunner(ci, base_path)
+        learnersessions = learnermode.Sessions(ci, base_path, connection)
+        epr.addProcessor(learnersessions)
+
+        videointeraction = videomode.Sessions(ci, base_path, connection)
+        epr.addProcessor(videointeraction)
+
+        forumSession = forummode.Sessions(ci, base_path, connection)
+        epr.addProcessor(forumSession)
+
+        quizmode = quiz_mode.Assessments(ci, base_path, connection)
+        epr.addProcessor(quizmode)
+
+        quizsessions = quiz_mode.Sessions(ci, base_path, connection)
+        epr.addProcessor(quizsessions)
+
+        epr.processall()
+
+    if not skipMetadata:
+        learnermode.process(coursename, base_path, connection, ci)
+        forummode.process(coursename, base_path, ci, connection)
+
+
+def purgecourse(coursename, base_path):
+    logging.basicConfig(level=logging.DEBUG,
+                        format='%(asctime)s %(levelname)s %(filename)s '
+                        '%(funcName)s %(message)s')
+    infoname = names.course_structure_file(coursename, base_path)
+    ci = courseinformation.extract(infoname)
+    cid = ci['course_id']
+    connection = opendb()
+
+    logger.info('Purging course [%s]' % (cid,))
+
+    cursor = connection.cursor()
+
+    logger.info('Purging course_learner table')
+    sql = ("delete from course_learner "
+           "where course_learner_id in ("
+           "  select course_learner_id "
+           "  from learner_index where course_id =%s)")
+    cursor.execute(sql, (cid,))
+
+    logger.info('Purging learner_demographic table')
+    sql = ("delete from learner_demographic "
+           "where course_learner_id in ("
+           "  select course_learner_id "
+           "  from learner_index where course_id =%s)")
+    cursor.execute(sql, (cid,))
+
+    logger.info('Purging sessions table')
+    sql = ("delete from sessions "
+           "where course_learner_id in ("
+           "  select course_learner_id "
+           "  from learner_index where course_id =%s)")
+    cursor.execute(sql, (cid,))
+
+    logger.info('Purging video_interaction table')
+    sql = ("delete from learner_demographic "
+           "where course_learner_id in ("
+           "  select course_learner_id "
+           "  from learner_index where course_id =%s)")
+    cursor.execute(sql, (cid,))
+
+    logger.info('Purging quiz_questions table')
+    sql = ("delete from quiz_questions "
+           "where question_id in ("
+           "  select element_id "
+           "  from course_elements where course_id =%s)")
+    cursor.execute(sql, (cid,))
+
+    logger.info('Purging submissions table')
+    sql = ("delete from submissions "
+           "where submission_id in ("
+           "  select element_id "
+           "  from course_elements where course_id =%s)")
+    cursor.execute(sql, (cid,))
+
+    logger.info('Purging assessments table')
+    sql = ("delete from assessments "
+           "where assessment_id in ("
+           "  select element_id "
+           "  from course_elements where course_id =%s)")
+    cursor.execute(sql, (cid,))
+
+    logger.info('Purging quiz_sessions table')
+    sql = ("delete from quiz_sessions "
+           "where session_id in ("
+           "  select element_id "
+           "  from course_elements where course_id =%s)")
+    cursor.execute(sql, (cid,))
+
+    logger.info('Purging forum_interaction table')
+    sql = ("delete from forum_interaction "
+           "where course_learner_id in ("
+           "  select course_learner_id "
+           "  from learner_index where course_id =%s)")
+    cursor.execute(sql, (cid,))
+
+    logger.info('Purging forum_sessions table')
+    sql = ("delete from forum_sessions "
+           "where course_learner_id in ("
+           "  select course_learner_id "
+           "  from learner_index where course_id =%s)")
+    cursor.execute(sql, (cid,))
+
+    logger.info('Purging course_elements table')
+    sql = ("delete from course_elements where course_id =%s")
+    cursor.execute(sql, (cid,))
+
+    logger.info('Purging learner_index table')
+    sql = ("delete from learner_index where course_id =%s")
+    cursor.execute(sql, (cid,))
+
+    logger.info('Purging courses table')
+    sql = ("delete from courses where course_id =%s")
+    cursor.execute(sql, (cid,))

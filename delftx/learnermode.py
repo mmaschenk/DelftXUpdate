@@ -1,4 +1,5 @@
-from delftx.util import names, EventlogProcessor
+from delftx.util import names
+from delftx import EventlogProcessor
 import datetime
 import operator
 import logging
